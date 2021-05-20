@@ -32,7 +32,7 @@ for (const name in toExport) {
 }
 
 let namespace = document.createElement("div");
-namespace.innerHTML = "Copy this and paste at the Console(F12) of my new domain (<a href=\"https://spotky1004.com\">https://spotky1004.com</a>) to migrate";
+namespace.innerHTML = "<span color=\"#f00\">Copy this and paste at the Console(F12) of my new domain (<a href=\"https://spotky1004.com\">https://spotky1004.com</a>) to migrate</span>";
 mainDiv.append(namespace);
 let exportBox = document.createElement("textarea");
 exportBox.value = saveString;
