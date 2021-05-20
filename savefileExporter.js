@@ -27,7 +27,7 @@ for (const name in toExport) {
         exportBox.value = saveData;
         mainDiv.append(exportBox);
         
-        saveString += `localStorage.${name} = "${localStorage[name]}";`
+        saveString += `localStorage.${name} = \`${localStorage[name]}\`;`
     }
 }
 
