@@ -4,7 +4,10 @@ const toExport = {
     alphabetTree: "Alphabet Tree",
     ordinalDimSave: "Ordinal Dimensions",
     saveFile: "Universe Farm",
-    blockHoleShrinker: "Block Hole Shrinker (this game doesn't have export button, but here's your save)"
+    blockHoleShrinker: "Block Hole Shrinker (this game doesn't have export button, but here's your save)",
+    countToOverflow: "Count to Overflow",
+    GunpowderFactory: "Gunpowder Factory",
+    timeLayerSave: "Timfinity"
 };
 
 let saveString = "";
@@ -24,7 +27,7 @@ for (const name in toExport) {
         exportBox.value = saveData;
         mainDiv.append(exportBox);
         
-        saveString += `localStorage.${name} = "${btoa(localStorage[name])}";`
+        saveString += `localStorage.${name} = "${localStorage[name]}";`
     }
 }
 
