@@ -93,7 +93,7 @@ function calcPixelWeights() {
     if (PIXEL_TYPES.empty === type) return Infinity;
     if (PIXEL_TYPES.leaf === type) return 1500 * (40 - i) * mult + 5;
     if (PIXEL_TYPES.trunk === type) return 80;
-    if (PIXEL_TYPES.hat === type) return 10;
+    if (PIXEL_TYPES.hat === type) return 40;
     if (PIXEL_TYPES.eyes === type) return 300;
     if (PIXEL_TYPES.mouth === type) return 250;
   });
