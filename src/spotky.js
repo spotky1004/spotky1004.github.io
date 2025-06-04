@@ -294,7 +294,7 @@ function loop() {
   if (!state.isRunning) return;
 
   const t = new Date().getTime();
-  const dt = (t - state.t) / 1000;
+  const dt = Math.min(0.1, (t - state.t) / 1000);
   state.t = t;
   render();
   updateWind(dt);
