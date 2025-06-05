@@ -273,6 +273,18 @@ function render() {
   const unitSize = calcUnitSize();
   const pixelTypes = groupifyPixels();
   const pixelPoses = calcPixelPoses();
+    for (let z = 0; z <= 5; z++) {
+    for (let i = 0; i < height; i++) {
+      for (let j = 0; j < width; j++) {
+        if (pixelTypes[i][j] !== z) continue;
+        const pos = pixelPoses[i][j];
+        const [h, s, l, a] = rgbToHsl(pixels[i][j]);
+        if (a === 0) continue;
+        ctx.fillStyle = `hsla(${h}, ${s}%, ${l * (0.993 ** i)}%, ${a}%)`;
+        ctx.fillRect(pos.x, pos.y, unitSize, unitSize);
+      }
+    }
+  }
   for (let z = 0; z <= 5; z++) {
     for (let i = 0; i < height; i++) {
       for (let j = 0; j < width; j++) {
@@ -281,8 +293,6 @@ function render() {
         const posDif = pixelDiffs[i][j];
         const [h, s, l, a] = rgbToHsl(pixels[i][j]);
         if (a === 0) continue;
-        ctx.fillStyle = `hsla(${h}, ${s}%, ${l * (0.993 ** i)}%, ${a}%)`;
-        ctx.fillRect(pos.x, pos.y, unitSize, unitSize);
         ctx.fillStyle = `hsla(${h}, ${s}%, ${l}%, ${a}%)`;
         ctx.fillRect(...pos.add(posDif.mul(unitSize)), unitSize, unitSize);
       }
