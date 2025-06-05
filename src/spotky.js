@@ -59,8 +59,8 @@ function calcPixelPoses() {
 
 const PIXEL_TYPES = {
   empty: 0,
-  leaf: 1,  //    _:::_
-  trunk: 2, //   <'^' >
+  trunk: 1, //    _:::_
+  leaf: 2,  //   <'^' >
   hat: 3,   //  <   ~  >
   eyes: 4,  // <      ~ >
   mouth: 5  //   |_ -|
@@ -71,12 +71,12 @@ function groupifyPixels() {
     const [r, g, b, a] = pixels[i][j];
     if (a === 0) return 0;
     if (i <= 10) return 3;
-    if (width - i <= 6 && r >= g) return 2;
+    if (width - i <= 6 && r >= g) return 1;
     if (r === g && g === b) {
       if (r === 6 * 16) return 5;
       return 4;
     }
-    return 1;
+    return 2;
   });
 }
 
@@ -91,8 +91,8 @@ function calcPixelWeights() {
     const type = types[i][j];
     const mult = pixel.reduce((a, b) => a * (1 - (b / 255) ** 0.1), 1);
     if (PIXEL_TYPES.empty === type) return Infinity;
-    if (PIXEL_TYPES.leaf === type) return 1500 * (40 - i) * mult + 5;
     if (PIXEL_TYPES.trunk === type) return 80;
+    if (PIXEL_TYPES.leaf === type) return 1500 * (40 - i) * mult + 5;
     if (PIXEL_TYPES.hat === type) return 40;
     if (PIXEL_TYPES.eyes === type) return 300;
     if (PIXEL_TYPES.mouth === type) return 250;
