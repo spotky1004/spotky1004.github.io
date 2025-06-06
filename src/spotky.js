@@ -16,6 +16,7 @@ const state = {
   width: 0, height: 0,
   mousePos: null,
   t: 0,
+  speed: 1,
   isLoaded: false,
   isRunning: false
 };
@@ -149,38 +150,29 @@ function updateWind(dt) {
       const power = dir.norm();
       if (power === 0) continue;
 
+      const deg = (Math.atan2(dir.y, dir.x) + 2 * Math.PI) % (2 * Math.PI);
+      const div = Math.floor(deg * 4 / Math.PI);
+      let divProgress = (deg * 4 / Math.PI) % 1;
+      if (div % 2 === 0) divProgress = 1 - divProgress;
+
       const moveDir = dir.mul((power / (0.001 + power)) ** (2 / dt));
-      const moveDirAbs = moveDir.abs();
-      const xSign = Math.sign(moveDir.x), ySign = Math.sign(moveDir.y);
+      const lineWind = moveDir.mul(divProgress).mul(loss);
+      const diagWind = moveDir.mul(1 - divProgress).mul(loss);
 
       nextState[i][j] = nextState[i][j].add(dir.sub(moveDir));
-      let lineWind = new Vec2();
-      let diagWind = new Vec2();
-      if (moveDirAbs.x > moveDirAbs.y) {
-        const diagPower = moveDirAbs.y;
-        diagWind = new Vec2(xSign * diagPower, ySign * diagPower);
-        lineWind = new Vec2(xSign * (moveDirAbs.x - diagPower), 0);
-      } else {
-        const diagPower = moveDirAbs.x;
-        diagWind = new Vec2(xSign * diagPower, ySign * diagPower);
-        lineWind = new Vec2(0, ySign * (moveDirAbs.y - diagPower));
-      }
-      lineWind = lineWind.mul(loss);
-      diagWind = diagWind.mul(loss);
 
       let iDif = 0, jDif = 0;
-
-      if (lineWind.y < 0 && i !== 0) iDif = -1;
-      if (lineWind.y > 0 && i + 1 !== height) iDif = 1;
-      if (lineWind.x < 0 && j !== 0) jDif = -1;
-      if (lineWind.x > 0 && j + 1 !== width) jDif = 1;
+      if ((div === 5 || div === 6) && i !== 0) iDif = -1;
+      if ((div === 1 || div === 2) && i + 1 !== height) iDif = 1;
+      if ((div === 3 || div === 4) && j !== 0) jDif = -1;
+      if ((div === 0 || div === 7) && j + 1 !== width) jDif = 1;
       if (iDif !== 0 || jDif !== 0) nextState[i + iDif][j + jDif] = nextState[i + iDif][j + jDif].add(lineWind);
 
       iDif = 0, jDif = 0;
-      if (diagWind.x < 0 && diagWind.y < 0 && i !== 0 && j !== 0) iDif = -1, jDif = -1;
-      if (diagWind.x > 0 && diagWind.y < 0 && i !== 0 && j + 1 !== width) iDif = -1, jDif = 1;
-      if (diagWind.x < 0 && diagWind.y > 0 && i + 1 !== height && j !== 0) iDif = 1, jDif = -1;
-      if (diagWind.x > 0 && diagWind.y > 0 && i + 1 !== height && j + 1 !== width) iDif = 1, jDif = 1;
+      if ((div === 4 || div === 5) && i !== 0 && j !== 0) iDif = -1, jDif = -1;
+      if ((div === 6 || div === 7) && i !== 0 && j + 1 !== width) iDif = -1, jDif = 1;
+      if ((div === 2 || div === 3) && i + 1 !== height && j !== 0) iDif = 1, jDif = -1;
+      if ((div === 0 || div === 1) && i + 1 !== height && j + 1 !== width) iDif = 1, jDif = 1;
       if (iDif !== 0 || jDif !== 0) nextState[i + iDif][j + jDif] = nextState[i + iDif][j + jDif].add(diagWind);
     }
   }
@@ -250,10 +242,11 @@ function renderWindArrow() {
       const pos = pixelPoses[i][j];
       const dir = wind[i][j];
       const power = dir.norm();
+      if (power < 0.05) continue;
       const color = `rgb(${255 * power}, 0, ${255 * (1 - power)})`;
       drawArrow(
         pos.add(unitSize / 2),
-        unitSize * power, Math.atan2(dir.y, dir.x),
+        unitSize * power * 2, Math.atan2(dir.y, dir.x),
         color
       );
     }
@@ -304,7 +297,7 @@ function loop() {
   if (!state.isRunning) return;
 
   const t = new Date().getTime();
-  const dt = Math.min(0.1, (t - state.t) / 1000);
+  const dt = Math.min(0.1, (t - state.t) / 1000) * state.speed;
   state.t = t;
   render();
   updateWind(dt);
