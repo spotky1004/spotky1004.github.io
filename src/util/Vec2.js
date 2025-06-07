@@ -49,6 +49,10 @@ export default class Vec2 {
     return new Vec2(Math.floor(this.x), Math.floor(this.y));
   }
 
+  round() {
+    return new Vec2(Math.round(this.x), Math.round(this.y));
+  }
+
   abs() {
     return new Vec2(Math.abs(this.x), Math.abs(this.y));
   }

@@ -4,9 +4,20 @@ import rgbToHsl from "./util/rgbToHsl.js";
 import gen2dArray from "./util/gen2dArray.js";
 import Vec2 from "./util/Vec2.js";
 
+const GROUND_TYPES = {
+  empty: 0,
+  grass_light: 1,
+  grass_dark: 2,
+  dirt_light: 3,
+  dirt_dark: 4
+};
+const groundPixels = ["#0000", "#91d966", "#86ca5c", "#e3bdaa", "#cca693"];
+
 const state = {
   /** @type {[r: number, g: number, b: number, a: number][][]} */
   pixels: [],
+  /** @type {number[][]} */
+  ground: [],
   /** @type {Vec2[][]} */
   wind: [],
   /** @type {Vec2[][]} */
@@ -16,6 +27,22 @@ const state = {
   width: 0, height: 0,
   mousePos: null,
   t: 0,
+  cache: {
+    cavnasSize: {
+      value: new Vec2(0, 0),
+      t: -1,
+    },
+    pixelGroups: {
+      /** @type {number[][]} */
+      value: [],
+      isVaild: false
+    },
+    pixelWeights: {
+      /** @type {number[][]} */
+      value: [],
+      isVaild: false
+    }
+  },
   speed: 1,
   isLoaded: false,
   isRunning: false
@@ -34,28 +61,46 @@ image.addEventListener("load", e => {
   state.isLoaded = true;
   state.width = (pixels[0] ?? []).length;
   state.height = pixels.length;
+  state.ground = generateGround(state.width * 4, 3, 5);
   start();
 });
 
-function calcUnitSize() {
-  const sw = window.innerWidth, sh = window.innerHeight;
-  const { width, height } = state;
-  return Math.floor(0.9 * Math.min(sw, sh) / Math.max(width, height));
+function generateGround(width = 100, minHeight = 3, maxHeight = 5) {
+  const out = gen2dArray(maxHeight, width, () => 0);
+  let curHeight = Math.round((maxHeight + minHeight) / 2);
+  let p = 0;
+  for (let j = 0; j < width; j++) {
+    p += (1 - p) / 100;
+    if (Math.random() < p) {
+      if (minHeight === curHeight) curHeight++;
+      else if (maxHeight === curHeight) curHeight--;
+      else curHeight += Math.floor(Math.random() * 2) * 2 - 1;
+      curHeight = Math.max(minHeight, Math.max(minHeight, curHeight));
+    }
+
+    out[maxHeight - 1 - (curHeight - 1)][j] = (j % 2 ? GROUND_TYPES.grass_light : GROUND_TYPES.grass_dark);
+    for (let i = 0; i < curHeight - 1; i++) {
+      if (Math.random() < 0.6 ** (curHeight - 2 - i)) out[maxHeight - 1 - i][j] = GROUND_TYPES.dirt_dark;
+      else out[maxHeight - 1 - i][j] = GROUND_TYPES.dirt_light;
+    }
+  }
+  return out;
 }
 
-/**
- * @returns {Vec2[][]}
- */
-function calcPixelPoses() {
-  const sw = window.innerWidth, sh = window.innerHeight;
-  const { width, height } = state;
+function calcCanvasSize() {
+  const cache = state.cache.cavnasSize;
+  if (state.t === state.cache.cavnasSize.t) return cache.value.clone();
 
-  const unitSize = calcUnitSize();
-  const cx = Math.floor(sw / 2);
-  return gen2dArray(height, width, (i, j) => new Vec2(
-    Math.floor(cx + unitSize * (j - width / 2)),
-    sh - (height - i) * unitSize
-  ));
+  const canvas = els.spotky.canvas;
+  cache.t = state.t;
+  cache.value = new Vec2(canvas.clientWidth, canvas.clientHeight);
+  return cache.value;
+}
+
+function calcUnitSize() {
+  const canvas = calcCanvasSize();
+  const { width, height } = state;
+  return Math.floor(0.9 * Math.min(canvas.x, canvas.y) / Math.max(width, height));
 }
 
 const PIXEL_TYPES = {
@@ -67,8 +112,11 @@ const PIXEL_TYPES = {
   mouth: 5  //   |_ -|
 };
 function groupifyPixels() {
+  const cache = state.cache.pixelGroups;
+  if (cache.isVaild) return cache.value;
+
   const { pixels, width, height } = state;
-  return gen2dArray(height, width, (i, j) => {
+  cache.value = gen2dArray(height, width, (i, j) => {
     const [r, g, b, a] = pixels[i][j];
     if (a === 0) return 0;
     if (i <= 10) return 3;
@@ -79,15 +127,20 @@ function groupifyPixels() {
     }
     return 2;
   });
+  cache.isVaild = true;
+  return cache.value;
 }
 
 /**
  * @returns {number[][]}
  */
 function calcPixelWeights() {
+  const cache = state.cache.pixelWeights;
+  if (cache.isVaild) return cache.value;
+
   const { pixels, width, height } = state;
   const types = groupifyPixels();
-  return gen2dArray(height, width, (i, j) => {
+  cache.value = gen2dArray(height, width, (i, j) => {
     const pixel = pixels[i][j].slice(0, 3);
     const type = types[i][j];
     const mult = pixel.reduce((a, b) => a * (1 - (b / 255) ** 0.1), 1);
@@ -98,21 +151,36 @@ function calcPixelWeights() {
     if (PIXEL_TYPES.eyes === type) return 300;
     if (PIXEL_TYPES.mouth === type) return 250;
   });
+  cache.isVaild = true;
+  return cache.value;
 }
 
 /**
  * @param {Vec2} vec 
  */
 function convertToPixelPos(vec) {
-  const sw = window.innerWidth, sh = window.innerHeight;
+  const canvas = calcCanvasSize();
   const { width, height } = state;
 
   const unitSize = calcUnitSize();
   const s = new Vec2(
-    Math.floor(Math.floor(sw / 2) - unitSize * width / 2),
-    sh - height * unitSize
+    Math.floor(Math.floor(canvas.x / 2) - unitSize * width / 2),
+    canvas.y - height * unitSize
   );
   return vec.sub(s).div(unitSize);
+}
+
+/**
+ * @param {Vec2} vec 
+ */
+function convertToCanvasPos(vec) {
+  const canvas = calcCanvasSize();
+  const unitSize = calcUnitSize();
+  const { width, height } = state;
+  return new Vec2(
+    Math.floor((canvas.x / 2) + unitSize * (vec.x - width / 2)),
+    canvas.y - unitSize * (height - vec.y)
+  );
 }
 
 /**
@@ -205,6 +273,24 @@ function updateForce(dt) {
 }
 
 /**
+ * @param {Vec2} x 
+ * @param {number} size 
+ * @param {string} color 
+ */
+function drawSquare(pos, size, color = "#000") {
+  const canvas = els.spotky.canvas;
+  const cw = canvas.width, ch = canvas.height;
+  if (
+    0 > pos.x + size || pos.x - size > cw ||
+    0 > pos.y + size || pos.y - size > ch
+  ) return;
+  const ctx = canvas.getContext("2d");
+
+  ctx.fillStyle = color;
+  ctx.fillRect(...pos, size, size)
+}
+
+/**
  * @param {Vec2} dir 
  * @param {number} size 
  * @param {number} deg 
@@ -236,16 +322,14 @@ function drawArrow(dir, size, deg, color = "#000") {
 function renderWindArrow() {
   const { wind, width, height } = state;
   const unitSize = calcUnitSize();
-  const pixelPoses = calcPixelPoses();
   for (let i = 0; i < height; i++) {
     for (let j = 0; j < width; j++) {
-      const pos = pixelPoses[i][j];
       const dir = wind[i][j];
       const power = dir.norm();
       if (power < 0.05) continue;
       const color = `rgb(${255 * power}, 0, ${255 * (1 - power)})`;
       drawArrow(
-        pos.add(unitSize / 2),
+        convertToCanvasPos(new Vec2(j + 0.5, i + 0.5)),
         unitSize * power * 2, Math.atan2(dir.y, dir.x),
         color
       );
@@ -254,27 +338,39 @@ function renderWindArrow() {
 }
 
 function render() {
-  const sw = window.innerWidth, sh = window.innerHeight;
   const { pixels, pixelDiffs, width, height } = state;
   const canvas = els.spotky.canvas;
-  const ctx = canvas.getContext("2d");
 
-  canvas.width = sw;
-  canvas.height = sh;
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
   // ctx.clearRect(0, 0, sw, sh);
 
   const unitSize = calcUnitSize();
   const pixelTypes = groupifyPixels();
-  const pixelPoses = calcPixelPoses();
-    for (let z = 0; z <= 5; z++) {
+
+  // 🌱🟫
+  const ground = state.ground;
+  const gWidth = ground[0].length, gHeight = ground.length;
+  const gOffset = Math.floor(gWidth / 2);
+  for (let i = 0; i < gHeight; i++) {
+    for (let j = 0; j < gWidth; j++) {
+      const color = groundPixels[ground[i][j]];
+      drawSquare(convertToCanvasPos(new Vec2(j - gOffset, i + height - gHeight)), unitSize, color);
+    }
+  }
+
+  // 🌲
+  for (let z = 0; z <= 5; z++) {
     for (let i = 0; i < height; i++) {
       for (let j = 0; j < width; j++) {
         if (pixelTypes[i][j] !== z) continue;
-        const pos = pixelPoses[i][j];
         const [h, s, l, a] = rgbToHsl(pixels[i][j]);
         if (a === 0) continue;
-        ctx.fillStyle = `hsla(${h}, ${s}%, ${l * (0.993 ** i)}%, ${a}%)`;
-        ctx.fillRect(pos.x, pos.y, unitSize, unitSize);
+        drawSquare(
+          convertToCanvasPos(new Vec2(j, i)),
+          unitSize,
+          `hsla(${h}, ${s}%, ${l * (0.993 ** i)}%, ${a}%)`
+        );
       }
     }
   }
@@ -282,12 +378,14 @@ function render() {
     for (let i = 0; i < height; i++) {
       for (let j = 0; j < width; j++) {
         if (pixelTypes[i][j] !== z) continue;
-        const pos = pixelPoses[i][j];
         const posDif = pixelDiffs[i][j];
         const [h, s, l, a] = rgbToHsl(pixels[i][j]);
         if (a === 0) continue;
-        ctx.fillStyle = `hsla(${h}, ${s}%, ${l}%, ${a}%)`;
-        ctx.fillRect(...pos.add(posDif.mul(unitSize)), unitSize, unitSize);
+        drawSquare(
+          convertToCanvasPos(new Vec2(j, i)).add(posDif.mul(unitSize)),
+          unitSize,
+          `hsla(${h}, ${s}%, ${l}%, ${a}%)`
+        );
       }
     }
   }
