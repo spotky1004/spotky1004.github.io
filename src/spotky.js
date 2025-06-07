@@ -1,8 +1,9 @@
 import els from "./els.js";
 import getImagePixels from "./util/getImagePixels.js";
-import rgbToHsl from "./util/rgbToHsl.js";
 import gen2dArray from "./util/gen2dArray.js";
 import Vec2 from "./util/Vec2.js";
+import * as Color from "./util/color.js";
+import Particle from "./util/Particle.js";
 
 const GROUND_TYPES = {
   empty: 0,
@@ -14,7 +15,7 @@ const GROUND_TYPES = {
 const groundPixels = ["#0000", "#91d966", "#86ca5c", "#e3bdaa", "#cca693"];
 
 const state = {
-  /** @type {[r: number, g: number, b: number, a: number][][]} */
+  /** @type {Color.RGB[][]} */
   pixels: [],
   /** @type {number[][]} */
   ground: [],
@@ -24,6 +25,8 @@ const state = {
   pixelDiffs: [],
   /** @type {Vec2[][]} */
   pixelForces: [],
+  /** @type {Set<Particle>} */
+  particles: new Set(),
   width: 0, height: 0,
   mousePos: null,
   t: 0,
@@ -54,7 +57,7 @@ const image = new Image();
 image.src = imagePath;
 image.addEventListener("load", e => {
   const pixels = getImagePixels(image);
-  state.pixels = pixels;
+  state.pixels = pixels.map(row => row.map(color => new Color.RGB(color)));
   state.wind = gen2dArray(pixels.length, pixels[0].length, () => new Vec2());
   state.pixelDiffs = gen2dArray(pixels.length, pixels[0].length, () => new Vec2());
   state.pixelForces = gen2dArray(pixels.length, pixels[0].length, () => new Vec2());
@@ -117,7 +120,7 @@ function groupifyPixels() {
 
   const { pixels, width, height } = state;
   cache.value = gen2dArray(height, width, (i, j) => {
-    const [r, g, b, a] = pixels[i][j];
+    const { r, g, b, a } = pixels[i][j];
     if (a === 0) return 0;
     if (i <= 10) return 3;
     if (width - i <= 6 && r >= g) return 1;
@@ -141,9 +144,10 @@ function calcPixelWeights() {
   const { pixels, width, height } = state;
   const types = groupifyPixels();
   cache.value = gen2dArray(height, width, (i, j) => {
-    const pixel = pixels[i][j].slice(0, 3);
+    const pixel = pixels[i][j];
+    const pixelValues = [pixel.r, pixel.g, pixel.b];
     const type = types[i][j];
-    const mult = pixel.reduce((a, b) => a * (1 - (b / 255) ** 0.1), 1);
+    const mult = pixelValues.reduce((a, b) => a * (1 - (b / 255) ** 0.1), 1);
     if (PIXEL_TYPES.empty === type) return Infinity;
     if (PIXEL_TYPES.trunk === type) return 80;
     if (PIXEL_TYPES.leaf === type) return 1500 * (40 - i) * mult + 5;
@@ -188,6 +192,7 @@ function convertToCanvasPos(vec) {
  * @param {Vec2} dir 
  */
 function addWind(from, dir) {
+  if (dir.norm() > 10) return;
   const { width, height, wind } = state;
 
   const f = from.floor();
@@ -272,8 +277,110 @@ function updateForce(dt) {
   }
 }
 
+const particleCreater = {
+  /** @type {(i: number, j: number) => Particle} */
+  leaf: (i, j) => {
+    const color = state.pixels[i][j].convertToHSL();
+    color.s *= 0.95;
+    color.l *= (0.9 - 0.1 * Math.random());
+    color.l = Math.min(1, color.l + 0.2 - i / 150);
+    color.a *= 0.7;
+
+    let lastT = 0;
+    let pos = new Vec2(j + Math.random(), i + Math.random());
+    let force = new Vec2(0, 0);
+    const size = 0.4 + Math.random() / 2;
+    return new Particle({
+      color: t => {
+        const aMult = t > 3 ? 1 - (t - 3) / 2 : 1;
+        color.a *= aMult;
+        const out = color.toString();
+        color.a /= aMult;
+        return out;
+      },
+      pos: t => {
+        const dt = t - lastT;
+        lastT = t;
+
+        const fPos = pos.floor()
+        let wind = (state.wind[fPos.y] ? state.wind[fPos.y][fPos.x] : undefined);
+        if (!wind) wind = new Vec2();
+
+        const loss = FORCE_LOSS ** (20 * dt);
+        const autoForce = new Vec2(Math.cos(2 * t), Math.abs(Math.sin(2 * t))).mul(0.1 * (1 + t / 3));
+        force = force.mul(loss);
+        if (wind) force = force.add(wind.add(autoForce).mul(dt * 80));
+        pos = pos.add(force.mul(dt));
+        return pos;
+      },
+      size: t => size * (0.8 ** (1 + t)),
+      lifetime: 5
+    });
+  },
+  wind: (i, j) => {
+    const color = new Color.HSL(0, 0, 1, 0.1);
+    let lastT = 0;
+    let pos = new Vec2(j + Math.random(), i + Math.random());
+    let force = state.wind[i][j];
+    const particle = new Particle({
+      color: t => {
+        const aMult = 1 - 2 * t;
+        color.a *= aMult;
+        const out = color.toString();
+        color.a /= aMult;
+        return out;
+      },
+      pos: t => {
+        const dt = t - lastT;
+        lastT = t;
+        
+        const fPos = pos.floor()
+        const wind = (state.wind[fPos.y] ? state.wind[fPos.y][fPos.x] : undefined);
+        if (wind) {
+          const div = 0.5 ** (dt * 100);
+          force = wind.mul(1 - div).add(force.mul(div));
+        }
+        const adjForce = force.norm() > 0.1 ? force : force.mul(0.1 / force.norm());
+
+        pos = pos.add(adjForce.mul(dt * 30));
+        return pos;
+      },
+      size: t => (Math.sqrt(force.norm()) / 1.5 + 0.1) / (1 + 2 * t),
+      lifetime: 0.5
+    });
+    return particle;
+  }
+};
+
+function updateParticles(dt) {
+  const { particles, width, height } = state;
+  const types = groupifyPixels();
+  
+  for (let i = 0; i < height; i++) {
+    for (let j = 0; j < width; j++) {
+      const type = types[i][j];
+      const windPower = state.wind[i][j].norm();
+      if (PIXEL_TYPES.leaf === type) {
+        if (windPower < 0.2) continue;
+        const chance = 1 - (0.9 - i / height / 3) ** (windPower * dt);
+        if (Math.random() < chance) particles.add(particleCreater.leaf(i, j));
+      }
+
+      if (0.2 < windPower) {
+        const chance = 1 - 0.1 ** (windPower * dt);
+        if (Math.random() < chance) particles.add(particleCreater.wind(i, j));
+      }
+    }
+  }
+
+  for (const particle of particles) {
+    particle.update(dt);
+    if (particle.time > particle.lifetime) particles.delete(particle);
+  }
+}
+
 /**
- * @param {Vec2} x 
+ * @param {Vec2} pos 
  * @param {number} size 
  * @param {string} color 
  */
@@ -338,7 +445,7 @@ function renderWindArrow() {
 }
 
 function render() {
-  const { pixels, pixelDiffs, width, height } = state;
+  const { pixels, particles, pixelDiffs, width, height } = state;
   const canvas = els.spotky.canvas;
 
   canvas.width = window.innerWidth;
@@ -364,12 +471,13 @@ function render() {
     for (let i = 0; i < height; i++) {
       for (let j = 0; j < width; j++) {
         if (pixelTypes[i][j] !== z) continue;
-        const [h, s, l, a] = rgbToHsl(pixels[i][j]);
-        if (a === 0) continue;
+        const pixel = pixels[i][j].convertToHSL();
+        if (pixel.a === 0) continue;
+        pixel.l *= 0.993 ** i;
         drawSquare(
           convertToCanvasPos(new Vec2(j, i)),
           unitSize,
-          `hsla(${h}, ${s}%, ${l * (0.993 ** i)}%, ${a}%)`
+          pixel.toString()
         );
       }
     }
@@ -379,15 +487,24 @@ function render() {
       for (let j = 0; j < width; j++) {
         if (pixelTypes[i][j] !== z) continue;
         const posDif = pixelDiffs[i][j];
-        const [h, s, l, a] = rgbToHsl(pixels[i][j]);
-        if (a === 0) continue;
+        const pixel = pixels[i][j];
+        if (pixel.a === 0) continue;
         drawSquare(
           convertToCanvasPos(new Vec2(j, i)).add(posDif.mul(unitSize)),
           unitSize,
-          `hsla(${h}, ${s}%, ${l}%, ${a}%)`
+          pixel.toString()
         );
       }
     }
+  }
+
+  // ✨✨
+  for (const particle of particles) {
+    drawSquare(
+      convertToCanvasPos(particle.pos),
+      unitSize * particle.size,
+      particle.color
+    );
   }
 }
 
@@ -397,9 +514,10 @@ function loop() {
   const t = new Date().getTime();
   const dt = Math.min(0.1, (t - state.t) / 1000) * state.speed;
   state.t = t;
-  render();
   updateWind(dt);
   updateForce(dt);
+  updateParticles(dt);
+  render();
   // renderWindArrow();
 
   requestAnimationFrame(loop);
@@ -412,15 +530,27 @@ function start() {
 }
 
 /**
- * @param {MouseEvent} e 
+ * @type {Map<string, Vec2>}
  */
-function mouseMoveHandler(e) {
-  const mousePos = new Vec2(e.clientX, e.clientY);
-  if (state.mousePos === null) state.mousePos = mousePos;
-  const delta = mousePos.sub(state.mousePos);
-  state.mousePos = mousePos;
+const prevPoses = new Map();
+/**
+ * @param {string} id 
+ * @param {Vec2} pos 
+ */
+function mouseMoveHandler(id, pos) {
+  if (!prevPoses.has(id)) {
+    prevPoses.set(id, pos);
+    return;
+  }
+
+  const prevPos = prevPoses.get(id);
+  const delta = pos.sub(prevPos);
+  prevPoses.set(id, pos);
+
   const unitSize = calcUnitSize();
-  addWind(convertToPixelPos(mousePos.sub(delta)), delta.div(unitSize));
+  addWind(convertToPixelPos(prevPos.sub(delta)), delta.div(unitSize));
 }
 
-els.spotky.canvas.addEventListener("mousemove", mouseMoveHandler);
+els.spotky.canvas.addEventListener("mousemove", e => {
+  mouseMoveHandler("mouse", new Vec2(e.clientX, e.clientY));
+});
