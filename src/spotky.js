@@ -447,7 +447,7 @@ function renderWindArrow() {
 function render() {
   const { pixels, particles, pixelDiffs, width, height } = state;
   const canvas = els.spotky.canvas;
-
+  
   canvas.width = document.body.clientWidth;
   canvas.height = document.body.clientHeight;
   // ctx.clearRect(0, 0, sw, sh);
