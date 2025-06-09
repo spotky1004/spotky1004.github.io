@@ -192,7 +192,7 @@ function convertToCanvasPos(vec) {
  * @param {Vec2} dir 
  */
 function addWind(from, dir) {
-  if (dir.norm() > 10) return;
+  if (dir.norm() > 20) return;
   const { width, height, wind } = state;
 
   const f = from.floor();
@@ -448,8 +448,8 @@ function render() {
   const { pixels, particles, pixelDiffs, width, height } = state;
   const canvas = els.spotky.canvas;
 
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+  canvas.width = document.body.clientWidth;
+  canvas.height = document.body.clientHeight;
   // ctx.clearRect(0, 0, sw, sh);
 
   const unitSize = calcUnitSize();
@@ -536,8 +536,9 @@ const prevPoses = new Map();
 /**
  * @param {string} id 
  * @param {Vec2} pos 
+ * @param {number} mult 
  */
-function mouseMoveHandler(id, pos) {
+function mouseMoveHandler(id, pos, mult) {
   if (!prevPoses.has(id)) {
     prevPoses.set(id, pos);
     return;
@@ -548,9 +549,28 @@ function mouseMoveHandler(id, pos) {
   prevPoses.set(id, pos);
 
   const unitSize = calcUnitSize();
-  addWind(convertToPixelPos(prevPos.sub(delta)), delta.div(unitSize));
+  addWind(convertToPixelPos(prevPos.sub(delta)), delta.div(unitSize).mul(mult));
 }
 
 els.spotky.canvas.addEventListener("mousemove", e => {
-  mouseMoveHandler("mouse", new Vec2(e.clientX, e.clientY));
+  let mult = 1;
+  if (e.buttons === 1) mult *= 2;
+  mouseMoveHandler("mouse", new Vec2(e.clientX, e.clientY), mult);
+});
+
+els.spotky.canvas.addEventListener("touchmove", e => {
+  for (const touch of e.touches) {
+    const touchId = `touch_${touch.identifier.toString()}`;
+    const mult = 1 + touch.force;
+    mouseMoveHandler(touchId, new Vec2(touch.clientX, touch.clientY),mult);
+  }
+});
+
+els.spotky.canvas.addEventListener("touchend", e => {
+  const vailds = [...e.touches].map(v => v.identifier);
+  for (let i = 0; i < 10; i++) {
+    const touchId = `touch_${i}`;
+    if (!prevPoses.has(touchId) || vailds.includes(i)) continue;
+    prevPoses.delete(touchId);
+  }
 });
