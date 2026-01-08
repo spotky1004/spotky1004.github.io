@@ -152,11 +152,11 @@ function calcPixelWeights() {
     if (PIXEL_TYPES.trunk === type) return 60;
     if (PIXEL_TYPES.leaf === type) {
       const hsl = pixels[i][j].convertToHSL();
-      return 50 * 0.95 ** i * ((3 - 1 / hsl.l) ** 2.6 * 2);
+      return 50 * 0.95 ** i * ((3 - 1 / hsl.l) ** 2.4 * 2);
     }
     if (PIXEL_TYPES.hat === type) return 35;
-    if (PIXEL_TYPES.cheek === type) return 8;
-    if (PIXEL_TYPES.eyes === type) return 140;
+    if (PIXEL_TYPES.cheek === type) return 12;
+    if (PIXEL_TYPES.eyes === type) return 999;
     if (PIXEL_TYPES.mouth === type) return 60;
   });
   cache.isVaild = true;
