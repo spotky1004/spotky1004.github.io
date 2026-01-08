@@ -52,7 +52,7 @@ const state = {
 };
 window.state = state;
 
-const imagePath = "./resource/image/Spotky E6 NoBG.png";
+const imagePath = "./resource/image/SpotkyTree E7.png";
 const image = new Image();
 image.src = imagePath;
 image.addEventListener("load", e => {
@@ -73,12 +73,13 @@ function generateGround(width = 100, minHeight = 3, maxHeight = 5) {
   let curHeight = Math.round((maxHeight + minHeight) / 2);
   let p = 0;
   for (let j = 0; j < width; j++) {
-    p += (1 - p) / 100;
+    p += (1 - p) / 50;
     if (Math.random() < p) {
       if (minHeight === curHeight) curHeight++;
       else if (maxHeight === curHeight) curHeight--;
       else curHeight += Math.floor(Math.random() * 2) * 2 - 1;
       curHeight = Math.max(minHeight, Math.max(minHeight, curHeight));
+      p = 0;
     }
 
     out[maxHeight - 1 - (curHeight - 1)][j] = (j % 2 ? GROUND_TYPES.grass_light : GROUND_TYPES.grass_dark);
@@ -111,8 +112,9 @@ const PIXEL_TYPES = {
   trunk: 1, //    _:::_
   leaf: 2,  //   <'^' >
   hat: 3,   //  <   ~  >
-  eyes: 4,  // <      ~ >
-  mouth: 5  //   |_ -|
+  cheek: 5, // <      ~ >
+  eyes: 4,  //   |_ -|
+  mouth: 6
 };
 function groupifyPixels() {
   const cache = state.cache.pixelGroups;
@@ -121,14 +123,15 @@ function groupifyPixels() {
   const { pixels, width, height } = state;
   cache.value = gen2dArray(height, width, (i, j) => {
     const { r, g, b, a } = pixels[i][j];
-    if (a === 0) return 0;
-    if (i <= 10) return 3;
-    if (width - i <= 6 && r >= g) return 1;
-    if (r === g && g === b) {
-      if (r === 6 * 16) return 5;
-      return 4;
-    }
-    return 2;
+    const rgb = new Color.RGB(r, g, b, a);
+    const hsl = rgb.convertToHSL();
+    if (a === 0) return PIXEL_TYPES.empty;
+    if (i <= 30 && Math.abs(hsl.h - 45) < 5) return PIXEL_TYPES.hat;
+    if (["rgb(255, 255, 255)", "rgb(13, 26, 2)", "rgb(19, 35, 5)", "rgb(40, 63, 20)"].includes(rgb.toString())) return PIXEL_TYPES.eyes;
+    if (hsl.h === 313) return PIXEL_TYPES.cheek;
+    if (hsl.h === 91) return PIXEL_TYPES.mouth;
+    if (Math.abs(hsl.h - 92) < 5) return PIXEL_TYPES.leaf;
+    return PIXEL_TYPES.trunk;
   });
   cache.isVaild = true;
   return cache.value;
@@ -144,16 +147,17 @@ function calcPixelWeights() {
   const { pixels, width, height } = state;
   const types = groupifyPixels();
   cache.value = gen2dArray(height, width, (i, j) => {
-    const pixel = pixels[i][j];
-    const pixelValues = [pixel.r, pixel.g, pixel.b];
     const type = types[i][j];
-    const mult = pixelValues.reduce((a, b) => a * (1 - (b / 255) ** 0.1), 1);
     if (PIXEL_TYPES.empty === type) return Infinity;
-    if (PIXEL_TYPES.trunk === type) return 80;
-    if (PIXEL_TYPES.leaf === type) return 1500 * (40 - i) * mult + 5;
-    if (PIXEL_TYPES.hat === type) return 40;
-    if (PIXEL_TYPES.eyes === type) return 300;
-    if (PIXEL_TYPES.mouth === type) return 250;
+    if (PIXEL_TYPES.trunk === type) return 60;
+    if (PIXEL_TYPES.leaf === type) {
+      const hsl = pixels[i][j].convertToHSL();
+      return 50 * 0.95 ** i * ((3 - 1 / hsl.l) ** 2.6 * 2);
+    }
+    if (PIXEL_TYPES.hat === type) return 35;
+    if (PIXEL_TYPES.cheek === type) return 8;
+    if (PIXEL_TYPES.eyes === type) return 140;
+    if (PIXEL_TYPES.mouth === type) return 60;
   });
   cache.isVaild = true;
   return cache.value;
@@ -467,13 +471,13 @@ function render() {
   }
 
   // 🌲
-  for (let z = 0; z <= 5; z++) {
+  for (let z = 0; z <= 6; z++) {
     for (let i = 0; i < height; i++) {
       for (let j = 0; j < width; j++) {
         if (pixelTypes[i][j] !== z) continue;
         const pixel = pixels[i][j].convertToHSL();
-        if (pixel.a === 0) continue;
-        pixel.l *= 0.993 ** i;
+        if (pixel.a === 0 || pixel.l === 1) continue;
+        pixel.l *= 0.93;
         drawSquare(
           convertToCanvasPos(new Vec2(j, i)),
           unitSize,
@@ -482,13 +486,14 @@ function render() {
       }
     }
   }
-  for (let z = 0; z <= 5; z++) {
+  for (let z = 0; z <= 6; z++) {
     for (let i = 0; i < height; i++) {
       for (let j = 0; j < width; j++) {
         if (pixelTypes[i][j] !== z) continue;
         const posDif = pixelDiffs[i][j];
-        const pixel = pixels[i][j];
+        const pixel = pixels[i][j].convertToHSL();
         if (pixel.a === 0) continue;
+        pixel.l = Math.min(1, pixel.l * 1.02)
         drawSquare(
           convertToCanvasPos(new Vec2(j, i)).add(posDif.mul(unitSize)),
           unitSize,
