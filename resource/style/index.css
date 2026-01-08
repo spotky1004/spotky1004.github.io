@@ -13,6 +13,27 @@ body {
   overflow: hidden;
 }
 
+#welcome {
+  position: absolute;
+  top: 3vh;
+  right: 1.5vh;
+  transform: translateX(-50%);
+
+  font-weight: bold;
+  font-size: 3vh;
+  color: #4eb143;
+  opacity: 0.15;
+
+  transition: opacity 0.5s linear;
+  user-select: none;
+}
+
+#welcome:hover {
+  opacity: 1;
+  transition: opacity 0.1s linear;
+}
+
+
 #spotky-canvas {
   display: block;
 }
