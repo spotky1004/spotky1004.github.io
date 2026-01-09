@@ -480,7 +480,7 @@ function render() {
         if (pixelTypes[i][j] !== z) continue;
         const pixel = pixels[i][j].convertToHSL();
         if (pixel.a === 0 || pixel.l === 1) continue;
-        pixel.l = Math.min(1, pixel.l * 0.93);
+        pixel.l = Math.min(1, pixel.l * 1.02);
         drawSquare(
           convertToCanvasPos(new Vec2(j, i)),
           unitSize,
