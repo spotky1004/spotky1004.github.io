@@ -200,10 +200,10 @@ function addWind(from, dir) {
   const { width, height, wind } = state;
 
   const f = from.floor();
-  for (let i = -3; i <= 3; i++) {
+  for (let i = -8; i <= 8; i++) {
     const yt = f.y + i;
     if (0 > yt || yt >= height) continue;
-    for (let j = -3; j <= 3; j++) {
+    for (let j = -8; j <= 8; j++) {
       const xt = f.x + j;
       if (0 > xt || xt >= width) continue;
       const div = 1 + Math.sqrt(i * i + j * j) ** 2;
@@ -276,7 +276,7 @@ function updateForce(dt) {
             .sub(pixelDiffs[i][j].mul(40))
             .mul(dt / w)
         );
-      pixelDiffs[i][j] = pixelDiffs[i][j].add(pixelForces[i][j].mul(10 * dt));
+      pixelDiffs[i][j] = pixelDiffs[i][j].add(pixelForces[i][j].mul(5 * dt));
     }
   }
 }
@@ -297,10 +297,13 @@ const particleCreater = {
     return new Particle({
       color: t => {
         const aMult = t > 3 ? 1 - (t - 3) / 2 : 1;
-        color.a *= aMult;
-        const out = color.toString();
-        color.a /= aMult;
-        return out;
+        const lAdd = Math.random() / 20 + 0.2;
+        return new Color.HSL(
+          color.h,
+          color.s,
+          Math.min(1, color.l + lAdd),
+          color.a * aMult
+        ).toString();
       },
       pos: t => {
         const dt = t - lastT;
@@ -313,7 +316,7 @@ const particleCreater = {
         const loss = FORCE_LOSS ** (20 * dt);
         const autoForce = new Vec2(Math.cos(2 * t), Math.abs(Math.sin(2 * t))).mul(0.1 * (1 + t / 3));
         force = force.mul(loss);
-        if (wind) force = force.add(wind.add(autoForce).mul(dt * 80));
+        if (wind) force = force.add(wind.add(autoForce).mul(dt * 160));
         pos = pos.add(force.mul(dt));
         return pos;
       },
@@ -366,12 +369,12 @@ function updateParticles(dt) {
       const windPower = state.wind[i][j].norm();
       if (PIXEL_TYPES.leaf === type) {
         if (windPower < 0.2) continue;
-        const chance = 1 - (0.9 - i / height / 3) ** (windPower * dt);
+        const chance = 1 - (0.9 - i / height / 3) ** (windPower * dt / 2);
         if (Math.random() < chance) particles.add(particleCreater.leaf(i, j));
       }
 
       if (0.2 < windPower) {
-        const chance = 1 - 0.1 ** (windPower * dt);
+        const chance = 1 - 0.1 ** (windPower * dt / 2);
         if (Math.random() < chance) particles.add(particleCreater.wind(i, j));
       }
     }
@@ -449,7 +452,7 @@ function renderWindArrow() {
 }
 
 function render() {
-  const { pixels, particles, pixelDiffs, width, height } = state;
+  const { pixels, particles, pixelDiffs, pixelForces, width, height } = state;
   const canvas = els.spotky.canvas;
   
   canvas.width = document.body.clientWidth;
@@ -477,7 +480,7 @@ function render() {
         if (pixelTypes[i][j] !== z) continue;
         const pixel = pixels[i][j].convertToHSL();
         if (pixel.a === 0 || pixel.l === 1) continue;
-        pixel.l *= 0.93;
+        pixel.l = Math.min(1, pixel.l * 0.93);
         drawSquare(
           convertToCanvasPos(new Vec2(j, i)),
           unitSize,
@@ -490,10 +493,11 @@ function render() {
     for (let i = 0; i < height; i++) {
       for (let j = 0; j < width; j++) {
         if (pixelTypes[i][j] !== z) continue;
-        const posDif = pixelDiffs[i][j];
         const pixel = pixels[i][j].convertToHSL();
         if (pixel.a === 0) continue;
-        pixel.l = Math.min(1, pixel.l * 1.02)
+        const posDif = pixelDiffs[i][j];
+        const posF = pixelForces[i][j];
+        pixel.l = Math.min(1, pixel.l + (posF.norm() ** (1/8)) / 15);
         drawSquare(
           convertToCanvasPos(new Vec2(j, i)).add(posDif.mul(unitSize)),
           unitSize,
