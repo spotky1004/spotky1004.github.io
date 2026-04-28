@@ -126,7 +126,14 @@ function groupifyPixels() {
     const rgb = new Color.RGB(r, g, b, a);
     const hsl = rgb.convertToHSL();
     if (a === 0) return PIXEL_TYPES.empty;
-    if (i <= 32) return PIXEL_TYPES.hat;
+    if (
+      i <= 27 ||
+      (i === 28 && j <= 48) ||
+      (i === 29 && j <= 45) ||
+      (i === 30 && j <= 41) ||
+      (i === 31 && j <= 36) ||
+      (i === 32 && j <= 18)
+    ) return PIXEL_TYPES.hat;
     if (["rgb(255, 255, 255)", "rgb(0, 0, 0)", "rgb(24, 29, 20)", "rgb(81, 92, 71)"].includes(rgb.toString())) return PIXEL_TYPES.eyes;
     if (["rgb(121, 121, 121)"].includes(rgb.toString())) return PIXEL_TYPES.mouth;
     if (["rgb(246, 197, 233)"].includes(rgb.toString())) return PIXEL_TYPES.cheek;
@@ -153,7 +160,6 @@ function calcPixelWeights() {
     if (PIXEL_TYPES.trunk === type) return 60;
     if (PIXEL_TYPES.leaf === type) {
       const hsl = pixels[i][j].convertToHSL();
-      console.log(hsl)
       return (80 - i) / 10 + (1 - (hsl.l - 0.4)) ** 5 * 5;
     }
     if (PIXEL_TYPES.hat === type) return 25;
