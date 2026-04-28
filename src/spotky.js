@@ -154,7 +154,7 @@ function calcPixelWeights() {
     if (PIXEL_TYPES.leaf === type) {
       const hsl = pixels[i][j].convertToHSL();
       console.log(hsl)
-      return (80 - i) / 5 + (1 - (hsl.l - 0.4)) ** 5 * 10;
+      return (80 - i) / 10 + (1 - (hsl.l - 0.4)) ** 5 * 5;
     }
     if (PIXEL_TYPES.hat === type) return 25;
     if (PIXEL_TYPES.cheek === type) return 12;
