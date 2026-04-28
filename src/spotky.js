@@ -52,7 +52,7 @@ const state = {
 };
 window.state = state;
 
-const imagePath = "./resource/image/SpotkyTree E7.png";
+const imagePath = "./resource/image/SpotkyTree E8 NoBG.png";
 const image = new Image();
 image.src = imagePath;
 image.addEventListener("load", e => {
@@ -126,11 +126,11 @@ function groupifyPixels() {
     const rgb = new Color.RGB(r, g, b, a);
     const hsl = rgb.convertToHSL();
     if (a === 0) return PIXEL_TYPES.empty;
-    if (i <= 30 && Math.abs(hsl.h - 45) < 5) return PIXEL_TYPES.hat;
-    if (["rgb(255, 255, 255)", "rgb(13, 26, 2)", "rgb(19, 35, 5)", "rgb(40, 63, 20)"].includes(rgb.toString())) return PIXEL_TYPES.eyes;
-    if (hsl.h === 313) return PIXEL_TYPES.cheek;
-    if (hsl.h === 91) return PIXEL_TYPES.mouth;
-    if (Math.abs(hsl.h - 92) < 5) return PIXEL_TYPES.leaf;
+    if (i <= 32) return PIXEL_TYPES.hat;
+    if (["rgb(255, 255, 255)", "rgb(0, 0, 0)", "rgb(24, 29, 20)", "rgb(81, 92, 71)"].includes(rgb.toString())) return PIXEL_TYPES.eyes;
+    if (["rgb(121, 121, 121)"].includes(rgb.toString())) return PIXEL_TYPES.mouth;
+    if (["rgb(246, 197, 233)"].includes(rgb.toString())) return PIXEL_TYPES.cheek;
+    if (i <= 66 || g > Math.max(r, b)) return PIXEL_TYPES.leaf;
     return PIXEL_TYPES.trunk;
   });
   cache.isVaild = true;
@@ -146,15 +146,17 @@ function calcPixelWeights() {
 
   const { pixels, width, height } = state;
   const types = groupifyPixels();
+  console.table(types.map(v => v.join("")).join("\n"));
   cache.value = gen2dArray(height, width, (i, j) => {
     const type = types[i][j];
     if (PIXEL_TYPES.empty === type) return Infinity;
     if (PIXEL_TYPES.trunk === type) return 60;
     if (PIXEL_TYPES.leaf === type) {
       const hsl = pixels[i][j].convertToHSL();
-      return 25 * 0.95 ** i * ((3 - 1 / hsl.l) ** 2.4 * 2) * (1 + Math.abs(j - 32) / 16);
+      console.log(hsl)
+      return (80 - i) / 5 + (1 - (hsl.l - 0.4)) ** 5 * 10;
     }
-    if (PIXEL_TYPES.hat === type) return 35;
+    if (PIXEL_TYPES.hat === type) return 25;
     if (PIXEL_TYPES.cheek === type) return 12;
     if (PIXEL_TYPES.eyes === type) return 999;
     if (PIXEL_TYPES.mouth === type) return 60;
@@ -198,6 +200,7 @@ function convertToCanvasPos(vec) {
 function addWind(from, dir) {
   if (dir.norm() > 20) return;
   const { width, height, wind } = state;
+  const mult = 1.5;
 
   const f = from.floor();
   for (let i = -8; i <= 8; i++) {
@@ -207,7 +210,7 @@ function addWind(from, dir) {
       const xt = f.x + j;
       if (0 > xt || xt >= width) continue;
       const div = 1 + Math.sqrt(i * i + j * j) ** 2;
-      wind[yt][xt] = wind[yt][xt].add(dir.div(div));
+      wind[yt][xt] = wind[yt][xt].add(dir.div(div).mul(mult));
     }
   }
 }
